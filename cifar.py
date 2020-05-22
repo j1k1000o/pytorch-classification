@@ -95,7 +95,7 @@ parser.add_argument('--advprop-lambda', type=float, default=0.0,
 
 
 args = parser.parse_args()
-args.step_size = 1. # alpha
+args.step_size = 1. / 255 # alpha
 # paper's heuristic for num of attack iters
 args.attack_iters = 1 if int(args.epsilon) == 1 else int(args.epsilon + 1)
 state = {k: v for k, v in args._get_kwargs()}
@@ -145,7 +145,8 @@ def main():
         num_classes = 100
     
     mean, std = mean.to(device), std.to(device)
-    args.actual_epsilon = args.epsilon / std
+    args.actual_epsilon = (args.epsilon / 255.) / std
+    args.actual_epsilon = args.actual_epsilon.view(1, 3, 1, 1)
     if args.advprop_lambda > 0.0:
         print(f'Running AdvProp with lambda = {args.advprop_lambda}, '
             f'epsilon = {args.epsilon}, ({args.actual_epsilon}), '
@@ -363,9 +364,9 @@ def attack_pgd(model, X, y, epsilon, alpha, attack_iters, restarts, lower_limit,
     max_delta = torch.zeros_like(X)
     for _ in range(restarts):
         delta = torch.zeros_like(X)
-        delta[:, 0, :, :].uniform_(-epsilon[0].item(), epsilon[0].item())
-        delta[:, 1, :, :].uniform_(-epsilon[1].item(), epsilon[1].item())
-        delta[:, 2, :, :].uniform_(-epsilon[2].item(), epsilon[2].item())
+        delta[:, 0, :, :].uniform_(-epsilon[0, 0].item(), epsilon[0, 0].item())
+        delta[:, 1, :, :].uniform_(-epsilon[0, 1].item(), epsilon[0, 1].item())
+        delta[:, 2, :, :].uniform_(-epsilon[0, 2].item(), epsilon[0, 2].item())
         delta.requires_grad = True
         for _ in range(attack_iters):
             output = model(X + delta, im_type='adv') # Using adversarial BNs
