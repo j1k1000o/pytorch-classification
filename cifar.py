@@ -86,8 +86,15 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
 #Device options
 parser.add_argument('--gpu-id', default='0', type=str,
                     help='id(s) for CUDA_VISIBLE_DEVICES')
+# Attack options
+parser.add_argument('--epsilon', type=float, help='attack strength')
+parser.add_argument('--advprop-lambda', type=float, help='attack strength')
+
 
 args = parser.parse_args()
+args.step_size = 1. # alpha
+# paper's heuristic for num of attack iters
+args.attack_iters = 1 if int(args.epsilon) == 1 else int(args.epsilon + 1)
 state = {k: v for k, v in args._get_kwargs()}
 
 # Validate dataset
@@ -114,16 +121,18 @@ def main():
         mkdir_p(args.checkpoint)
     # Data
     print('==> Preparing dataset %s' % args.dataset)
+    mean = torch.tensor([0.4914, 0.4822, 0.4465])
+    std = torch.tensor([0.2023, 0.1994, 0.2010])
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Normalize(mean, std),
     ])
 
     transform_test = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Normalize(mean, std),
     ])
     if args.dataset == 'cifar10':
         dataloader = datasets.CIFAR10
@@ -131,7 +140,16 @@ def main():
     else:
         dataloader = datasets.CIFAR100
         num_classes = 100
-
+    
+    mean, std = mean.to(device), std.to(device)
+    args.actual_epsilon = args.epsilon / std
+    if args.advprop_lambda > 0.0:
+        print(f'Running AdvProp with lambda = {args.advprop_lambda}, '
+            f'epsilon = {args.epsilon}, ({args.actual_epsilon}), '
+            f'n = {args.attack_iters}, and alpha = {args.step_size}')
+    
+    lower_limit = (0.0 - mean) / std
+    upper_limit = (1.0 - mean) / std
 
     trainset = dataloader(root='./data', train=True, download=True, transform=transform_train)
     trainloader = data.DataLoader(trainset, batch_size=args.train_batch, shuffle=True, num_workers=args.workers)
@@ -179,7 +197,8 @@ def main():
 
         print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, state['lr']))
 
-        train_loss, train_acc = train(trainloader, model, criterion, optimizer, epoch)
+        train_loss, train_acc = train(trainloader, model, criterion, optimizer, 
+            epoch, lower_limit, upper_limit, args)
         test_loss, test_acc = test(testloader, model, criterion, epoch)
 
         # append logger file
@@ -203,8 +222,8 @@ def main():
     print('Best acc:')
     print(best_acc)
 
-def train(trainloader, model, criterion, optimizer, epoch, epsilon, alpha, 
-        attack_iters, lower_limit, upper_limit):
+def train(trainloader, model, criterion, optimizer, epoch, lower_limit, 
+        upper_limit, args):
     # switch to train mode
     model.train()
 
@@ -221,8 +240,11 @@ def train(trainloader, model, criterion, optimizer, epoch, epsilon, alpha,
         data_time.update(time.time() - end)
         inputs, targets = inputs.to(device), targets.to(device)
         # compute adv examples
-        adv_inputs = attack_pgd(model, inputs, targets, epsilon, alpha, 
-            attack_iters, restarts=1, lower_limit, upper_limit)
+        adv_inputs = attack_pgd(
+            model, inputs, targets, epsilon=args.actual_epsilon, 
+            alpha=args.alpha, attack_iters=args.attack_iters, restarts=1, 
+            lower_limit=lower_limit, upper_limit=upper_limit
+        )
 
         # compute output
         outputs = model(inputs)
