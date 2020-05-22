@@ -149,11 +149,12 @@ def main():
     args.actual_epsilon = args.actual_epsilon.view(1, 3, 1, 1)
     if args.advprop_lambda > 0.0:
         print(f'Running AdvProp with lambda = {args.advprop_lambda}, '
-            f'epsilon = {args.epsilon}, ({args.actual_epsilon}), '
+            f'epsilon = {args.epsilon}, ({args.actual_epsilon.squeeze()}), '
             f'n = {args.attack_iters}, and alpha = {args.step_size}')
     
     lower_limit = (0.0 - mean) / std
     upper_limit = (1.0 - mean) / std
+    lower_limit, upper_limit = lower_limit.view(1,3,1,1), upper_limit.view(1,3,1,1)
 
     trainset = dataloader(root='./data', train=True, download=True, transform=transform_train)
     trainloader = data.DataLoader(trainset, batch_size=args.train_batch, shuffle=True, num_workers=args.workers)
