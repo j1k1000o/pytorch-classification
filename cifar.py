@@ -87,8 +87,8 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
 parser.add_argument('--gpu-id', default='0', type=str,
                     help='id(s) for CUDA_VISIBLE_DEVICES')
 # Attack options
-parser.add_argument('--epsilon', type=float, help='attack strength')
-parser.add_argument('--advprop-lambda', type=float, help='attack strength')
+parser.add_argument('--epsilon', type=float, default=1, help='attack strength')
+parser.add_argument('--advprop-lambda', type=float, default=0.0, help='attack strength')
 
 
 args = parser.parse_args()
@@ -239,20 +239,20 @@ def train(trainloader, model, criterion, optimizer, epoch, lower_limit,
         # measure data loading time
         data_time.update(time.time() - end)
         inputs, targets = inputs.to(device), targets.to(device)
-        # compute adv examples
-        adv_inputs = attack_pgd(
-            model, inputs, targets, epsilon=args.actual_epsilon, 
-            alpha=args.alpha, attack_iters=args.attack_iters, restarts=1, 
-            lower_limit=lower_limit, upper_limit=upper_limit
-        )
-
         # compute output
         outputs = model(inputs)
         loss = criterion(outputs, targets)
-        # adv outputs
-        adv_outputs = model(adv_inputs)
-        adv_loss = criterion(adv_outputs, targets)
-        loss = loss + adv_loss
+        # compute adv examples
+        if args.advprop_lambda > 0.0:
+            adv_inputs = attack_pgd(
+                model, inputs, targets, epsilon=args.actual_epsilon, 
+                alpha=args.alpha, attack_iters=args.attack_iters, restarts=1, 
+                lower_limit=lower_limit, upper_limit=upper_limit
+            )
+            # adv outputs
+            adv_outputs = model(adv_inputs)
+            adv_loss = criterion(adv_outputs, targets)
+            loss = loss + adv_loss
 
         # measure accuracy and record loss
         prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
