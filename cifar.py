@@ -18,14 +18,23 @@ import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import models.cifar as models
+from models.cifar import NetworkInNetwork
 
 from utils import Bar, Logger, AverageMeter, accuracy, mkdir_p, savefig
 
 
-model_names = sorted(name for name in models.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+model_names = ['NIN']
+
+class NINWrapper(nn.Module):
+    def __init__(self, _num_stages=3, _use_avg_on_conv3=True, indim=192, # 384, 
+        num_classes=10):
+        super(NINWrapper, self).__init__()
+        self.nin = NetworkInNetwork(_num_stages=_num_stages, _use_avg_on_conv3=_use_avg_on_conv3)
+        self.fc = nn.Linear(indim, num_classes)
+    
+    def forward(self, x, im_type):
+        x = self.nin(x, im_type, out_feat_keys=None)
+        return self.fc(x)
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10/100 Training')
 # Datasets
@@ -82,7 +91,7 @@ args = parser.parse_args()
 state = {k: v for k, v in args._get_kwargs()}
 
 # Validate dataset
-assert args.dataset == 'cifar10' or args.dataset == 'cifar100', 'Dataset can only be cifar10 or cifar100.'
+assert args.dataset in ['cifar10', 'cifar100'], 'Dataset should be cifar10 or cifar100.'
 
 # Use CUDA
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_id
@@ -97,16 +106,12 @@ if use_cuda:
     torch.cuda.manual_seed_all(args.manualSeed)
 
 best_acc = 0  # best test accuracy
-
+device = torch.device('cuda' if use_cuda else 'cpu')
 def main():
     global best_acc
     start_epoch = args.start_epoch  # start from epoch 0 or last checkpoint epoch
-
     if not os.path.isdir(args.checkpoint):
         mkdir_p(args.checkpoint)
-
-
-
     # Data
     print('==> Preparing dataset %s' % args.dataset)
     transform_train = transforms.Compose([
@@ -136,37 +141,7 @@ def main():
 
     # Model
     print("==> creating model '{}'".format(args.arch))
-    if args.arch.startswith('resnext'):
-        model = models.__dict__[args.arch](
-                    cardinality=args.cardinality,
-                    num_classes=num_classes,
-                    depth=args.depth,
-                    widen_factor=args.widen_factor,
-                    dropRate=args.drop,
-                )
-    elif args.arch.startswith('densenet'):
-        model = models.__dict__[args.arch](
-                    num_classes=num_classes,
-                    depth=args.depth,
-                    growthRate=args.growthRate,
-                    compressionRate=args.compressionRate,
-                    dropRate=args.drop,
-                )
-    elif args.arch.startswith('wrn'):
-        model = models.__dict__[args.arch](
-                    num_classes=num_classes,
-                    depth=args.depth,
-                    widen_factor=args.widen_factor,
-                    dropRate=args.drop,
-                )
-    elif args.arch.endswith('resnet'):
-        model = models.__dict__[args.arch](
-                    num_classes=num_classes,
-                    depth=args.depth,
-                    block_name=args.block_name,
-                )
-    else:
-        model = models.__dict__[args.arch](num_classes=num_classes)
+    model = NINWrapper(num_classes=num_classes)
 
     model = torch.nn.DataParallel(model).cuda()
     cudnn.benchmark = True
@@ -175,10 +150,10 @@ def main():
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 
     # Resume
-    title = 'cifar-10-' + args.arch
+    title = f'{args.dataset}-{args.arch}'
     if args.resume:
         # Load checkpoint.
-        print('==> Resuming from checkpoint..')
+        print('==> Resuming from checkpoint...')
         assert os.path.isfile(args.resume), 'Error: no checkpoint directory found!'
         args.checkpoint = os.path.dirname(args.resume)
         checkpoint = torch.load(args.resume)
@@ -194,7 +169,7 @@ def main():
 
     if args.evaluate:
         print('\nEvaluation only')
-        test_loss, test_acc = test(testloader, model, criterion, start_epoch, use_cuda)
+        test_loss, test_acc = test(testloader, model, criterion, start_epoch)
         print(' Test Loss:  %.8f, Test Acc:  %.2f' % (test_loss, test_acc))
         return
 
@@ -204,8 +179,8 @@ def main():
 
         print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, state['lr']))
 
-        train_loss, train_acc = train(trainloader, model, criterion, optimizer, epoch, use_cuda)
-        test_loss, test_acc = test(testloader, model, criterion, epoch, use_cuda)
+        train_loss, train_acc = train(trainloader, model, criterion, optimizer, epoch)
+        test_loss, test_acc = test(testloader, model, criterion, epoch)
 
         # append logger file
         logger.append([state['lr'], train_loss, test_loss, train_acc, test_acc])
@@ -228,7 +203,8 @@ def main():
     print('Best acc:')
     print(best_acc)
 
-def train(trainloader, model, criterion, optimizer, epoch, use_cuda):
+def train(trainloader, model, criterion, optimizer, epoch, epsilon, alpha, 
+        attack_iters, lower_limit, upper_limit):
     # switch to train mode
     model.train()
 
@@ -243,18 +219,22 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda):
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         # measure data loading time
         data_time.update(time.time() - end)
-
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda(async=True)
-        inputs, targets = torch.autograd.Variable(inputs), torch.autograd.Variable(targets)
+        inputs, targets = inputs.to(device), targets.to(device)
+        # compute adv examples
+        adv_inputs = attack_pgd(model, inputs, targets, epsilon, alpha, 
+            attack_iters, restarts=1, lower_limit, upper_limit)
 
         # compute output
         outputs = model(inputs)
         loss = criterion(outputs, targets)
+        # adv outputs
+        adv_outputs = model(adv_inputs)
+        adv_loss = criterion(adv_outputs, targets)
+        loss = loss + adv_loss
 
         # measure accuracy and record loss
         prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
-        losses.update(loss.data[0], inputs.size(0))
+        losses.update(loss.item(), inputs.size(0))
         top1.update(prec1[0], inputs.size(0))
         top5.update(prec5[0], inputs.size(0))
 
@@ -283,7 +263,7 @@ def train(trainloader, model, criterion, optimizer, epoch, use_cuda):
     bar.finish()
     return (losses.avg, top1.avg)
 
-def test(testloader, model, criterion, epoch, use_cuda):
+def test(testloader, model, criterion, epoch):
     global best_acc
 
     batch_time = AverageMeter()
@@ -300,18 +280,14 @@ def test(testloader, model, criterion, epoch, use_cuda):
     for batch_idx, (inputs, targets) in enumerate(testloader):
         # measure data loading time
         data_time.update(time.time() - end)
-
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda()
-        inputs, targets = torch.autograd.Variable(inputs, volatile=True), torch.autograd.Variable(targets)
-
+        inputs, targets = inputs.to(device), targets.to(device)
         # compute output
         outputs = model(inputs)
         loss = criterion(outputs, targets)
 
         # measure accuracy and record loss
         prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
-        losses.update(loss.data[0], inputs.size(0))
+        losses.update(loss.item(), inputs.size(0))
         top1.update(prec1[0], inputs.size(0))
         top5.update(prec5[0], inputs.size(0))
 
@@ -347,6 +323,45 @@ def adjust_learning_rate(optimizer, epoch):
         state['lr'] *= args.gamma
         for param_group in optimizer.param_groups:
             param_group['lr'] = state['lr']
+
+
+# ======================================================
+# Utils for computing adversarial examples
+# Taken from
+# https://github.com/anonymous-sushi-armadillo/fast_is_better_than_free_CIFAR10/blob/master/evaluate_cifar.py#L45
+def attack_pgd(model, X, y, epsilon, alpha, attack_iters, restarts, lower_limit,
+        upper_limit):
+    def clamp(X, lower_limit, upper_limit):
+        return torch.max(torch.min(X, upper_limit), lower_limit)
+    
+    max_loss = torch.zeros(y.shape[0], device=X.device)
+    max_delta = torch.zeros_like(X)
+    for _ in range(restarts):
+        delta = torch.zeros_like(X)
+        delta[:, 0, :, :].uniform_(-epsilon[0, 0].item(), epsilon[0, 0].item())
+        delta[:, 1, :, :].uniform_(-epsilon[0, 1].item(), epsilon[0, 1].item())
+        delta[:, 2, :, :].uniform_(-epsilon[0, 2].item(), epsilon[0, 2].item())
+        delta.requires_grad = True
+        for _ in range(attack_iters):
+            output = model(X + delta, im_type='adv') # Using adversarial BNs
+            index = torch.nonzero(output.max(1)[1] == y) # torch.where(output.max(1)[1] == y)
+            if len(index) == 0:
+                break
+            loss = F.cross_entropy(output, y)
+            loss.backward()
+            grad = delta.grad.detach()
+            d = delta[index, :, :, :]
+            g = grad[index, :, :, :]
+            x = X[index, :, :, :]
+            d = clamp(d + alpha * torch.sign(g), -epsilon, epsilon)
+            d = clamp(d, lower_limit - x, upper_limit - x)
+            delta.data[index, :, :, :] = d
+            delta.grad.zero_()
+        all_loss = F.cross_entropy(model(X+delta, im_type='adv'), y, reduction='none')
+        max_delta[all_loss >= max_loss] = delta.detach()[all_loss >= max_loss]
+        max_loss = torch.max(max_loss, all_loss)
+    return max_delta
+
 
 if __name__ == '__main__':
     main()
