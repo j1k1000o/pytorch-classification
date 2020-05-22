@@ -362,9 +362,9 @@ def attack_pgd(model, X, y, epsilon, alpha, attack_iters, restarts, lower_limit,
     max_delta = torch.zeros_like(X)
     for _ in range(restarts):
         delta = torch.zeros_like(X)
-        delta[:, 0, :, :].uniform_(-epsilon[0, 0].item(), epsilon[0, 0].item())
-        delta[:, 1, :, :].uniform_(-epsilon[0, 1].item(), epsilon[0, 1].item())
-        delta[:, 2, :, :].uniform_(-epsilon[0, 2].item(), epsilon[0, 2].item())
+        delta[:, 0, :, :].uniform_(-epsilon[0].item(), epsilon[0].item())
+        delta[:, 1, :, :].uniform_(-epsilon[1].item(), epsilon[1].item())
+        delta[:, 2, :, :].uniform_(-epsilon[2].item(), epsilon[2].item())
         delta.requires_grad = True
         for _ in range(attack_iters):
             output = model(X + delta, im_type='adv') # Using adversarial BNs
