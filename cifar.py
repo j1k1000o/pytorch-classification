@@ -248,7 +248,7 @@ def train(trainloader, model, criterion, optimizer, epoch, lower_limit,
         if args.advprop_lambda > 0.0:
             adv_inputs = attack_pgd(
                 model, inputs, targets, epsilon=args.actual_epsilon, 
-                alpha=args.alpha, attack_iters=args.attack_iters, restarts=1, 
+                alpha=args.step_size, attack_iters=args.attack_iters, restarts=1, 
                 lower_limit=lower_limit, upper_limit=upper_limit
             )
             # adv outputs
