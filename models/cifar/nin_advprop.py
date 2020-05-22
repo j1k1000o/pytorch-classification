@@ -95,64 +95,64 @@ class NetworkInNetwork(nn.Module):
 
     def _parse_out_keys_arg(self, out_feat_keys):
 
-    	# By default return the features of the last layer / module.
-    	out_feat_keys = [self.all_feat_names[-1],] if out_feat_keys is None else out_feat_keys
+        # By default return the features of the last layer / module.
+        out_feat_keys = [self.all_feat_names[-1],] if out_feat_keys is None else out_feat_keys
 
         if len(out_feat_keys) == 0:
-    		raise ValueError('Empty list of output feature keys.')
+            raise ValueError('Empty list of output feature keys.')
         for f, key in enumerate(out_feat_keys):
-    		if key not in self.all_feat_names:
-    			raise ValueError('Feature with name {0} does not exist. Existing features: {1}.'.format(key, self.all_feat_names))
-    		elif key in out_feat_keys[:f]:
-    			raise ValueError('Duplicate output feature key: {0}.'.format(key))
+            if key not in self.all_feat_names:
+                raise ValueError('Feature with name {0} does not exist. Existing features: {1}.'.format(key, self.all_feat_names))
+            elif key in out_feat_keys[:f]:
+                raise ValueError('Duplicate output feature key: {0}.'.format(key))
 
-    	# Find the highest output feature in `out_feat_keys
-    	max_out_feat = max([self.all_feat_names.index(key) for key in out_feat_keys])
+        # Find the highest output feature in `out_feat_keys
+        max_out_feat = max([self.all_feat_names.index(key) for key in out_feat_keys])
 
-    	return out_feat_keys, max_out_feat
+        return out_feat_keys, max_out_feat
 
     def forward(self, x, im_type, out_feat_keys=None):
-    	"""Forward an image `x` through the network and return the asked output features.
+        """Forward an image `x` through the network and return the asked output features.
 
-    	Args:
-    	  x: input image.
-    	  out_feat_keys: a list/tuple with the feature names of the features
+        Args:
+          x: input image.
+          out_feat_keys: a list/tuple with the feature names of the features
                 that the function should return. By default the last feature of
                 the network is returned.
 
-    	Return:
+        Return:
             out_feats: If multiple output features were asked then `out_feats`
                 is a list with the asked output features placed in the same
                 order as in `out_feat_keys`. If a single output feature was
                 asked then `out_feats` is that output feature (and not a list).
-    	"""
-    	out_feat_keys, max_out_feat = self._parse_out_keys_arg(out_feat_keys)
-    	out_feats = [None] * len(out_feat_keys)
+        """
+        out_feat_keys, max_out_feat = self._parse_out_keys_arg(out_feat_keys)
+        out_feats = [None] * len(out_feat_keys)
 
-    	feat = self.aux_bn(x, im_type=im_type) # auxiliary batch norm # x
-      #encode
-    	for f in range(2):
-    		feat = self._feature_blocks[f](feat)
-    		key = self.all_feat_names[f]
-    		if key in out_feat_keys:
-    			out_feats[out_feat_keys.index(key)] = feat
+        feat = self.aux_bn(x, im_type=im_type) # auxiliary batch norm # x
+        #encode
+        for f in range(2):
+            feat = self._feature_blocks[f](feat)
+            key = self.all_feat_names[f]
+            if key in out_feat_keys:
+                out_feats[out_feat_keys.index(key)] = feat
+    
+        #reparameterize
+        mu = feat[:,:192]
+        logvar = feat[:, 192:]
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        feat = eps.mul(std * 0.001).add_(mu)
       
-       #reparameterize
-    	mu = feat[:,:192]
-    	logvar = feat[:, 192:]
-    	std = torch.exp(0.5*logvar)
-    	eps = torch.randn_like(std)
-    	feat = eps.mul(std * 0.001).add_(mu)
-      
-      #decode
-    	for f in range(2, max_out_feat+1):
-    		feat = self._feature_blocks[f](feat)
-    		key = self.all_feat_names[f]
-    		if key in out_feat_keys:
-    			out_feats[out_feat_keys.index(key)] = feat
+        #decode
+        for f in range(2, max_out_feat+1):
+            feat = self._feature_blocks[f](feat)
+            key = self.all_feat_names[f]
+            if key in out_feat_keys:
+                out_feats[out_feat_keys.index(key)] = feat
 
-    	out_feats = out_feats[0] if len(out_feats)==1 else out_feats
-    	return out_feats
+        out_feats = out_feats[0] if len(out_feats)==1 else out_feats
+        return out_feats
 
     def aux_bn(self, x, im_type):
         # Assertion
