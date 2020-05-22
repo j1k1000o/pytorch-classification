@@ -255,7 +255,7 @@ def train(trainloader, model, criterion, optimizer, epoch, lower_limit,
                 lower_limit=lower_limit, upper_limit=upper_limit
             )
             # adv outputs
-            adv_outputs = model(adv_inputs)
+            adv_outputs = model(adv_inputs, im_type='adv')
             adv_loss = criterion(adv_outputs, targets)
             loss = loss + adv_loss
 
