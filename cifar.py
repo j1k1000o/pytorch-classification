@@ -166,8 +166,8 @@ def main():
 
     # Model
     print("==> creating model '{}'".format(args.arch))
-    # model = resnet(depth=20, num_classes=num_classes)
-    model = Avd_NIN(num_classes=num_classes)
+    model = resnet(depth=20, num_classes=num_classes)
+    # model = Avd_NIN(num_classes=num_classes)
 
     model = torch.nn.DataParallel(model).cuda()
     cudnn.benchmark = True
