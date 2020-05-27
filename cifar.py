@@ -174,7 +174,8 @@ def main():
     criterion = nn.CrossEntropyLoss()
     # optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=0.9, 
     #     momentum=0.9)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=0.9,
+        momentum=0.9)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, 
         gamma=args.gamma)
 
