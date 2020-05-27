@@ -203,7 +203,7 @@ def main():
     for module in model.modules():
         if isinstance(module, nn.BatchNorm2d):
             tot_bns += 1
-            # module.momentum = 0.99
+            module.momentum = 0.99
     print(f'Found and modified the momentum of {tot_bns} BatchNorm layers')
 
     if args.evaluate:
