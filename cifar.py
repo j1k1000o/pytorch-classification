@@ -166,7 +166,7 @@ def main():
 
     # Model
     print("==> creating model '{}'".format(args.arch))
-    model = NINWrapper(num_classes=num_classes)
+    model = Avd_NIN(num_classes=num_classes)
 
     model = torch.nn.DataParallel(model).cuda()
     cudnn.benchmark = True
