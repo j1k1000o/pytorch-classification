@@ -172,8 +172,9 @@ def main():
     cudnn.benchmark = True
     print('    Total params: %.2fM' % (sum(p.numel() for p in model.parameters())/1000000.0))
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=0.9, 
-        momentum=0.9)
+    # optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=0.9, 
+    #     momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=0.9)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, 
         gamma=args.gamma)
 
