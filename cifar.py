@@ -19,7 +19,7 @@ import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from models.cifar import Avd_NIN
+from models.cifar import Avd_NIN, resnet
 
 from utils import Bar, Logger, AverageMeter, accuracy, mkdir_p, savefig
 
@@ -166,7 +166,7 @@ def main():
 
     # Model
     print("==> creating model '{}'".format(args.arch))
-    model = Avd_NIN(num_classes=num_classes)
+    model = resnet(depth=20, num_classes=num_classes) # Avd_NIN(num_classes=num_classes)
 
     model = torch.nn.DataParallel(model).cuda()
     cudnn.benchmark = True
@@ -199,7 +199,7 @@ def main():
     for module in model.modules():
         if isinstance(module, nn.BatchNorm2d):
             tot_bns += 1
-            module.momentum = 0.99
+            # module.momentum = 0.99
     print(f'Found and modified the momentum of {tot_bns} BatchNorm layers')
 
     if args.evaluate:
