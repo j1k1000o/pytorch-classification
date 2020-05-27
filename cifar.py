@@ -147,7 +147,7 @@ def main():
         num_classes = 100
     
     mean, std = mean.to(device), std.to(device)
-    args.actual_epsilon = args.epsilon/ std
+    args.actual_epsilon = args.epsilon / std
     args.actual_epsilon = args.actual_epsilon.view(1, 3, 1, 1)
     if args.advprop_lambda > 0.0:
         print(f'Running AdvProp with lambda = {args.advprop_lambda}, '
@@ -166,7 +166,8 @@ def main():
 
     # Model
     print("==> creating model '{}'".format(args.arch))
-    model = resnet(depth=20, num_classes=num_classes) # Avd_NIN(num_classes=num_classes)
+    # model = resnet(depth=20, num_classes=num_classes)
+    model = Avd_NIN(num_classes=num_classes)
 
     model = torch.nn.DataParallel(model).cuda()
     cudnn.benchmark = True
@@ -174,8 +175,8 @@ def main():
     criterion = nn.CrossEntropyLoss()
     # optimizer = optim.RMSprop(model.parameters(), lr=args.lr, weight_decay=0.9, 
     #     momentum=0.9)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=0.9,
-        momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=0.9) # ,
+        # momentum=0.9)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, 
         gamma=args.gamma)
 
