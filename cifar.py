@@ -177,6 +177,7 @@ def main():
         momentum=0.9)
     # optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=0.9) # ,
         # momentum=0.9)
+    print(f'Will multiply the LR by {args.gamma} each {args.step_size} epochs')
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, 
         gamma=args.gamma)
 
