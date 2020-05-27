@@ -55,8 +55,8 @@ parser.add_argument('--lr', '--learning-rate', default=0.256, type=float,
                     metavar='LR', help='initial learning rate')
 parser.add_argument('--drop', '--dropout', default=0, type=float,
                     metavar='Dropout', help='Dropout ratio')
-parser.add_argument('--step-size', type=int, default=3,
-                    help='Decrease learning rate each step-size epochs.')
+parser.add_argument('--drop-epochs', type=int, default=3,
+                    help='Decrease learning rate each drop-epochs epochs.')
 parser.add_argument('--gamma', type=float, default=0.97, 
                     help='LR is multiplied by gamma on schedule.')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
@@ -177,8 +177,8 @@ def main():
         momentum=0.9)
     # optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=0.9) # ,
         # momentum=0.9)
-    print(f'Will multiply the LR by {args.gamma} each {args.step_size} epochs')
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, 
+    print(f'Will multiply the LR by {args.gamma} each {args.drop_epochs} epochs')
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.drop_epochs, 
         gamma=args.gamma)
 
     # Resume
