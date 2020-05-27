@@ -213,14 +213,15 @@ def main():
 
     # Train and val
     for epoch in range(start_epoch, args.epochs):
-        print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, state['lr']))
+        curr_lr = get_curr_lr(optimizer)
+        print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, curr_lr))
 
         train_loss, train_acc = train(trainloader, model, criterion, optimizer, 
             epoch, lower_limit, upper_limit, args)
         test_loss, test_acc = test(testloader, model, criterion, epoch)
 
         # append logger file
-        logger.append([state['lr'], train_loss, test_loss, train_acc, test_acc])
+        logger.append([curr_lr, train_loss, test_loss, train_acc, test_acc])
 
         # save model
         is_best = test_acc > best_acc
@@ -359,6 +360,9 @@ def save_checkpoint(state, is_best, checkpoint='checkpoint', filename='checkpoin
         shutil.copyfile(filepath, os.path.join(checkpoint, 'model_best.pth.tar'))
 
 
+def get_curr_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
 # ======================================================
 # Utils for computing adversarial examples
 # Taken from
