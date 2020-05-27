@@ -166,8 +166,8 @@ def main():
 
     # Model
     print("==> creating model '{}'".format(args.arch))
-    model = resnet(depth=20, num_classes=num_classes)
-    # model = Avd_NIN(num_classes=num_classes)
+    # model = resnet(depth=20, num_classes=num_classes)
+    model = Avd_NIN(num_classes=num_classes)
 
     model = torch.nn.DataParallel(model).cuda()
     cudnn.benchmark = True
@@ -259,7 +259,7 @@ def train(trainloader, model, criterion, optimizer, epoch, lower_limit,
         data_time.update(time.time() - end)
         inputs, targets = inputs.to(device), targets.to(device)
         # compute output
-        outputs = model(inputs) # , im_type='nat')
+        outputs = model(inputs, im_type='nat')
         loss = criterion(outputs, targets)
         # compute adv examples
         if args.advprop_lambda > 0.0:
@@ -323,7 +323,7 @@ def test(testloader, model, criterion, epoch):
         data_time.update(time.time() - end)
         inputs, targets = inputs.to(device), targets.to(device)
         # compute output
-        outputs = model(inputs) # , im_type='nat')
+        outputs = model(inputs, im_type='nat')
         loss = criterion(outputs, targets)
 
         # measure accuracy and record loss
