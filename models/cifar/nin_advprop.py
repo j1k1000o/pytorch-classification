@@ -200,3 +200,71 @@ class Regressor(nn.Module):
         else:
             return x1, x2
 
+
+class Avd_NIN(nn.Module):
+    def __init__(self, num_classes):
+        super(Avd_NIN, self).__init__()
+        self.num_classes = num_classes
+        self.features = SequentialADV(
+            nn.Conv2d(3, 192, 5, padding=2),
+            ADVBN(192),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(192, 160, 1),
+            ADVBN(160),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(160, 96, 1),
+            ADVBN(96),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(3, stride=2, ceil_mode=True),
+            nn.Dropout(inplace=True),
+            nn.Conv2d(96, 192, 5, padding=2),
+            ADVBN(192),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(192, 192, 1),
+            ADVBN(192),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(192, 192, 1),
+            ADVBN(192),
+            nn.ReLU(inplace=True),
+            nn.AvgPool2d(3, stride=2, ceil_mode=True),
+            nn.Dropout(inplace=True),
+            nn.Conv2d(192, 192, 3, padding=1),
+            ADVBN(192),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(192, 192, 1),
+            ADVBN(192),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(192, self.num_classes, 1),
+            nn.ReLU(inplace=True),
+            nn.AvgPool2d(8, stride=1)
+        )
+        self._initialize_weights()
+    def forward(self, x, im_type):
+        x = self.features(x, im_type)
+        x = x.view(x.size(0), self.num_classes)
+        return x
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.normal_(0, 0.05)
+                if m.bias is not None:
+                    m.bias.data.zero_()
+class ADVBN(nn.Module):
+    def __init__(self, in_features):
+        super(ADVBN, self).__init__()
+        self.nat = nn.BatchNorm2d(in_features)
+        self.adv = nn.BatchNorm2d(in_features)
+    def forward(self, x, im_type):
+        if im_type == 'nat':
+            return self.nat(x)
+        return self.adv(x)
+class SequentialADV(nn.Sequential):
+    def __init__(self, *args):
+        super(SequentialADV, self).__init__(*args)
+    def forward(self, input, im_type):
+        for module in self:
+            if isinstance(module, ADVBN):
+                input = module(input, im_type)
+            else:
+                input = module(input)
+        return input

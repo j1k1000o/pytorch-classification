@@ -19,7 +19,7 @@ import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from models.cifar import NetworkInNetwork
+from models.cifar import Avd_NIN
 
 from utils import Bar, Logger, AverageMeter, accuracy, mkdir_p, savefig
 
@@ -30,7 +30,7 @@ class NINWrapper(nn.Module):
     def __init__(self, _num_stages=3, _use_avg_on_conv3=True, indim=192, # 384, 
         num_classes=10):
         super(NINWrapper, self).__init__()
-        self.nin = NetworkInNetwork(_num_stages=_num_stages, _use_avg_on_conv3=_use_avg_on_conv3)
+        self.nin = Avd_NIN(_num_stages=_num_stages, _use_avg_on_conv3=_use_avg_on_conv3)
         self.fc = nn.Linear(indim, num_classes)
     
     def forward(self, x, im_type):

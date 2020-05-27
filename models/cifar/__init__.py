@@ -68,4 +68,4 @@ from .resnext import *
 from .wrn import *
 from .preresnet import *
 from .densenet import *
-from .nin_advprop import NetworkInNetwork
+from .nin_advprop import Avd_NIN
